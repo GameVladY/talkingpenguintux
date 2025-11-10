@@ -3,7 +3,7 @@ A simple "talking" application featuring Tux, the Linux penguin.
 
 This application listens to your input and repeats it back to you, just like a classic "talking" app.
 
-🌟 Features
+# 🌟 Features
 Interactive Tux: A graphical representation of Tux who responds to you.
 
 AI Mode: You can talk with him like a real Tux.
