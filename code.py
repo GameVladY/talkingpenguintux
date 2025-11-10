@@ -14,7 +14,7 @@ import urllib.request
 import json
 
 # --- Configuration ---
-CURRENT_VERSION = "v1.6" # <-- SET TO v1.6 as requested
+CURRENT_VERSION = "v1.7"
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
 WEBSITE_URL = "https://sites.google.com/view/verycooltalkinglinuxpenguintux/"
 GITHUB_RELEASES_URL = "https://github.com/GameVladY/talkingpenguintux/releases/latest"
@@ -114,10 +114,10 @@ class PenguinClone:
         self.target_x, self.target_y = None, None
         self.current_bubble = None
         self.main_pet_name = self.main_pet.name
-        self.chat_phrases = ["Hi!", "Linux!", "Compiling...", "Zzz...", "Got any fish?", f"Where is {self.main_pet_name}?"]
+        self.chat_phrases = ["Hi!", "Linux!", "Compiling...", "Zzz...", "Got any fish?", "Where is {}?".format(self.main_pet_name)]
         start_x = self.main_pet.root.winfo_x() + random.randint(-50, 50)
         start_y = self.main_pet.root.winfo_y() + random.randint(-50, 50)
-        self.root.geometry(f"+{start_x}+{start_y}")
+        self.root.geometry("+{}+{}".format(start_x, start_y))
         self.redraw_tux()
         self.idle_loop()
 
@@ -136,7 +136,7 @@ class PenguinClone:
         bubble_label = Label(bubble, text=text, bg="#FFFFE0", fg="black", padx=10, pady=10, wraplength=200, justify="left", relief="solid", borderwidth=1)
         bubble_label.pack()
         tux_x, tux_y = self.root.winfo_x(), self.root.winfo_y()
-        bubble.geometry(f"+{tux_x + 100}+{tux_y - 30}")
+        bubble.geometry("+{}+{}".format(tux_x + 100, tux_y - 30))
         bubble.after(duration_ms, lambda: bubble.destroy() if bubble and bubble.winfo_exists() else None)
 
     def simulated_chat(self): self.create_speech_bubble(random.choice(self.chat_phrases), 2000)
@@ -156,7 +156,7 @@ class PenguinClone:
         dx, dy = self.target_x - x, self.target_y - y
         if math.sqrt(dx**2 + dy**2) < 5: self.is_moving = False; self.redraw_tux(); self.idle_loop(); return
         angle = math.atan2(dy, dx)
-        self.root.geometry(f"+{int(x + 3 * math.cos(angle))}+{int(y + 3 * math.sin(angle))}")
+        self.root.geometry("+{}+{}".format(int(x + 3 * math.cos(angle)), int(y + 3 * math.sin(angle))))
         self.walk_frame += 1; self.redraw_tux(); self.root.after(50, self.move_loop)
 
 
@@ -171,6 +171,7 @@ class PenguinPet:
         self.chat_session = None
         self.current_bubble = None
         self.ai_controls_window = None
+        self.rps_window = None # <-- For new RPS game
         self.custom_menu = None
         self.ai_settings_menu = None
         self.appearance_menu = None
@@ -183,6 +184,7 @@ class PenguinPet:
         self.walk_frame = 0
         self.target_x, self.target_y = None, None
         self.game_running = False
+        self.fleeing_game_active = False
         self.mouse_x, self.mouse_y = 0, 0
         self.playground_running = False
         self.playground_target_x, self.playground_target_y = 0, 0
@@ -242,7 +244,7 @@ class PenguinPet:
         
     def show_welcome_screen(self):
         welcome_win = Toplevel(self.root); welcome_win.title("Welcome!"); welcome_win.geometry("400x250"); welcome_win.transient(self.root); welcome_win.wm_attributes("-topmost", True)
-        Label(welcome_win, text=f"Welcome, {self.name}!", font=("Arial", 14, "bold")).pack(pady=15)
+        Label(welcome_win, text="Welcome, {}!".format(self.name), font=("Arial", 14, "bold")).pack(pady=15)
         Label(welcome_win, text="You can interact with me by right-clicking on me.\n\nFeatures include:\n• AI Mode (Chat with me)\n• Play Games\n• Fun Actions & Facts\n• Drag me anywhere!", justify="left", wraplength=380).pack(pady=5)
         Button(welcome_win, text="Ok", command=welcome_win.destroy, width=10).pack(pady=20); self.root.wait_window(welcome_win)
         
@@ -254,11 +256,12 @@ class PenguinPet:
             elif event.num == 5: canvas.yview_scroll(1, "units")
 
     def toggle_custom_menu(self, event):
+        if self.fleeing_game_active: return
         if self.custom_menu: self.hide_custom_menu()
         else: self.show_custom_menu(event)
 
     def show_custom_menu(self, event):
-        self.hide_custom_menu()
+        self.hide_custom_menu() # Close any existing menus
         self.custom_menu = Toplevel(self.root); self.custom_menu.overrideredirect(True); self.custom_menu.wm_attributes("-topmost", True)
         menu_container = Frame(self.custom_menu, bg=BG_COLOR, highlightbackground=ACCENT_COLOR, highlightthickness=1); menu_container.pack()
         menu_canvas = Canvas(menu_container, bg=BG_COLOR, highlightthickness=0, width=220)
@@ -272,7 +275,7 @@ class PenguinPet:
 
         wander_text = "Toggle Wander Mode (On)" if self.wander_enabled else "Toggle Wander Mode (Off)"
         options = [
-            (f"Change My Name ({self.name})", self.change_name),
+            ("Change My Name ({})".format(self.name), self.change_name),
             ("--- Appearance ---", None),
             ("Appearance Settings...", self.show_appearance_menu),
             ("Force Mood: Normal", lambda: self.set_force_mood("normal")),
@@ -289,19 +292,22 @@ class PenguinPet:
             ("Destroy All Clones", self.destroy_all_clones),
             ("Clone Settings...", self.show_clone_settings_menu),
             ("--- Actions ---", None),
-            ("Eat a Fish", self.eat_fish), # <-- NEW ACTION
-            ("Take a Nap", self.take_nap), # <-- NEW ACTION
-            ("What's the Time?", self.tell_time), # <-- NEW ACTION
+            ("Do a Jump", self.do_a_jump),
+            ("Eat a Fish", self.eat_fish),
+            ("Take a Nap", self.take_nap),
+            ("What's the Time?", self.tell_time),
             ("Tell a story", self.tell_story),
             ("Sing a Song", self.sing_song),
             ("Tell a Bad Joke", self.tell_bad_joke),
             ("Clean My Desktop (Just Kidding!)", self.clean_desktop),
             ("--- Games ---", None),
+            ("Catch Me!", self.start_catch_me_game),
+            ("Fish Clicker", self.start_fish_clicker_game),
             ("Find the Fish", self.start_fish_game),
             ("Play in Playground", self.start_playground_game),
-            ("Play Catch the Mouse", self.start_catch_game),
+            ("Play Rock, Paper, Scissors", self.start_rps_game), # <-- REMADE
+            # "Play Catch the Mouse" <-- REMOVED
             ("Play Guess the Number", self.start_guess_game),
-            ("Play Rock, Paper, Scissors", self.start_rps_game),
             ("--- System ---", None),
             (wander_text, self.toggle_wander),
             ("Check for Updates...", self.check_for_updates),
@@ -317,10 +323,11 @@ class PenguinPet:
         self.custom_menu.update_idletasks()
         menu_height = min(menu_content_frame.winfo_reqheight(), 400)
         menu_canvas.config(height=menu_height)
-        self.custom_menu.geometry(f"+{event.x_root}+{event.y_root}"); self.custom_menu.focus_set(); self.custom_menu.grab_set()
+        self.custom_menu.geometry("+{}+{}".format(event.x_root, event.y_root)); self.custom_menu.focus_set(); self.custom_menu.grab_set()
 
     def hide_custom_menu(self, event=None):
         if self.custom_menu: self.custom_menu.grab_release(); self.custom_menu.destroy(); self.custom_menu = None
+        if self.rps_window: self.rps_window.destroy(); self.rps_window = None # <-- Close RPS window if open
 
     def _show_submenu(self, menu_ref_attr, options, hide_func):
         if getattr(self, menu_ref_attr, None): hide_func()
@@ -330,7 +337,7 @@ class PenguinPet:
         for text, command in options:
             item = Label(menu_container, text=text, bg=BG_COLOR, fg=FG_COLOR, relief="flat", anchor="w", padx=15, pady=5, justify="left", font=("Arial", 10))
             item.pack(fill="x"); item.bind("<Enter>", lambda e, i=item: i.config(bg=BUTTON_HOVER_COLOR)); item.bind("<Leave>", lambda e, i=item: i.config(bg=BG_COLOR)); item.bind("<Button-1>", lambda e, cmd=command: [hide_func(), cmd() if cmd else None]())
-        menu.geometry(f"+{self.root.winfo_x()+100}+{self.root.winfo_y()+100}"); menu.focus_set(); menu.grab_set()
+        menu.geometry("+{}+{}".format(self.root.winfo_x()+100, self.root.winfo_y()+100)); menu.focus_set(); menu.grab_set()
 
     def show_ai_settings_menu(self): self._show_submenu('ai_settings_menu', [("Set Custom Personality...", self.set_ai_personality), ("Reset AI to Default", self.reset_ai_personality)], self.hide_ai_settings_menu)
     def hide_ai_settings_menu(self, event=None):
@@ -357,46 +364,66 @@ class PenguinPet:
         if self.current_bubble: self.current_bubble.destroy()
         bubble = Toplevel(self.root); bubble.overrideredirect(True); bubble.wm_attributes("-topmost", True); bubble.config(bg='black'); bubble.wm_attributes('-transparentcolor', 'black'); self.current_bubble = bubble
         Label(bubble, text=text, bg="#FFFFE0", fg="black", padx=10, pady=10, wraplength=200, justify="left", relief="solid", borderwidth=1).pack()
-        bubble.geometry(f"+{self.root.winfo_x() + 100}+{self.root.winfo_y() - 30}")
+        bubble.geometry("+{}+{}".format(self.root.winfo_x() + 100, self.root.winfo_y() - 30))
         bubble.after(duration_ms, lambda: bubble.destroy() if bubble and bubble.winfo_exists() else None)
     def start_move(self, event): self.hide_custom_menu(); self.is_moving = False; self._x = event.x; self._y = event.y
     def stop_move(self, event): self._x = None; self._y = None; self.idle_loop()
     def on_motion(self, event):
+        if self.fleeing_game_active: return
         new_x, new_y = self.root.winfo_x() + event.x - self._x, self.root.winfo_y() + event.y - self._y
-        self.root.geometry(f"+{new_x}+{new_y}")
-        if self.ai_controls_window: self.ai_controls_window.geometry(f"+{new_x - 75}+{new_y + 160}")
+        self.root.geometry("+{}+{}".format(new_x, new_y))
+        if self.ai_controls_window: self.ai_controls_window.geometry("+{}+{}".format(new_x - 75, new_y + 160))
     def change_name(self):
         new = simpledialog.askstring("Name", "New name?", initialvalue=self.name)
-        if new and new.strip(): self.name = new.strip(); self.save_name(); self.create_speech_bubble(f"I'm {self.name}!", 3000); self.reset_ai_personality()
+        if new and new.strip(): self.name = new.strip(); self.save_name(); self.create_speech_bubble("I'm {}!".format(self.name), 3000); self.reset_ai_personality()
     def toggle_wander(self, force_state=None):
+        if self.fleeing_game_active: return # Don't wander while fleeing
         if force_state is not None: self.wander_enabled = force_state
         else: self.wander_enabled = not self.wander_enabled
-        if force_state is None: self.create_speech_bubble(f"Wander Mode is now {'On' if self.wander_enabled else 'Off'}!", 2000)
+        if force_state is None: self.create_speech_bubble("Wander Mode is now {}!".format('On' if self.wander_enabled else 'Off'), 2000)
         if self.wander_enabled: self.idle_loop()
         else: self.is_moving = False
     
-    # --- NEW ACTIONS ---
+    def do_a_jump(self):
+        if self.is_moving: return
+        self.set_mood("happy", 300)
+        x, y = self.root.winfo_x(), self.root.winfo_y()
+        self.root.geometry("+{}+{}".format(x, y-20))
+        self.root.after(150, lambda: self.root.geometry("+{}+{}".format(x, y)))
+        self.root.after(300, lambda: self.root.geometry("+{}+{}".format(x, y-20)))
+        self.root.after(450, lambda: self.root.geometry("+{}+{}".format(x, y)))
     def eat_fish(self):
-        self.create_speech_bubble("Yum! Thanks!", 2000)
-        self.set_mood("happy", 2000)
-        fish = self.canvas.create_text(110, 75, text="🐟", font=("Arial", 24), tags="temp")
-        self.root.after(1000, lambda: self.canvas.delete(fish) if self.canvas.winfo_exists() else None)
-        
+        self.create_speech_bubble("Yum! Thanks!", 2000); self.set_mood("happy", 2000)
+        fish = self.canvas.create_text(-20, 75, text="🐟", font=("Arial", 24), tags="temp_fish")
+        def animate_fish(step=0):
+            if not self.canvas.winfo_exists(): return
+            x_pos = -20 + (step * 8)
+            if x_pos > 110: self.canvas.delete("temp_fish"); return
+            self.canvas.coords(fish, x_pos, 75)
+            self.root.after(25, lambda: animate_fish(step + 1))
+        animate_fish()
     def take_nap(self):
         self.create_speech_bubble("Zzz... nap time.", 3000)
         self.set_force_mood("sad") # "Sad" eyes look like sleeping
         self.root.after(3000, lambda: self.set_force_mood(None)) # Wake up
-        
     def tell_time(self):
-        current_time = datetime.datetime.now().strftime("%I:%M %p") # e.g., 05:30 PM
-        self.create_speech_bubble(f"The time is\n{current_time}", 3000)
-
-    # --- Other Actions ---
+        current_time = datetime.datetime.now().strftime("%I:%M %p")
+        self.create_speech_bubble("The time is\n{}".format(current_time), 3000)
     def sing_song(self): self.create_speech_bubble(random.choice(self.songs), 6000)
     def what_am_i(self): self.create_speech_bubble("I'm a desktop pet written in Python using Tkinter!", 6000)
     def clean_desktop(self):
-        self.create_speech_bubble("*swish swish*", 1500); broom = self.canvas.create_text(75, 130, text="🧹", font=("Arial", 24), tags="temp")
-        self.root.after(1500, lambda: self.canvas.delete(broom) if self.canvas.winfo_exists() else None)
+        self.create_speech_bubble("*swish swish*", 2000)
+        broom = self.canvas.create_text(20, 130, text="🧹", font=("Arial", 24), tags="temp_broom")
+        def animate_sweep(step=0, direction=1):
+            if not self.canvas.winfo_exists(): return
+            if step > 20: self.canvas.delete("temp_broom"); return
+            x_move = 5 * direction
+            self.canvas.move(broom, x_move, 0)
+            new_direction = direction
+            if self.canvas.coords(broom)[0] > 100: new_direction = -1
+            elif self.canvas.coords(broom)[0] < 30: new_direction = 1
+            self.root.after(50, lambda: animate_sweep(step + 1, new_direction))
+        animate_sweep()
     def check_for_updates(self):
         self.create_speech_bubble("Checking for updates...", 2000); self.root.update_idletasks()
         try:
@@ -404,8 +431,8 @@ class PenguinPet:
             with urllib.request.urlopen(req, timeout=5) as response:
                 latest_version = json.loads(response.read().decode())["tag_name"]
                 if latest_version != CURRENT_VERSION:
-                     self.create_speech_bubble(f"New update {latest_version} is out!", 4000)
-                     if messagebox.askyesno("Update Available", f"Version {latest_version} is available!\n(Current: {CURRENT_VERSION})\n\nGo to download page?"):
+                     self.create_speech_bubble("New update {} is out!".format(latest_version), 4000)
+                     if messagebox.askyesno("Update Available", "Version {} is available!\n(Current: {})\n\nGo to download page?".format(latest_version, CURRENT_VERSION)):
                          webbrowser.open(GITHUB_RELEASES_URL)
                 else: self.create_speech_bubble("You have the latest version!", 3000)
         except Exception: self.create_speech_bubble("I couldn't check for updates...", 3000)
@@ -413,51 +440,135 @@ class PenguinPet:
     def tell_bad_joke(self): self.create_speech_bubble(random.choice(self.bad_jokes), 4000); self.set_mood("sad", 4000)
     def open_website(self): webbrowser.open_new_tab(WEBSITE_URL)
 
-    # --- All Games ---
+    # --- GAMES ---
+    def start_catch_me_game(self):
+        if self.fleeing_game_active: return
+        self.fleeing_game_active = True
+        self.toggle_wander(force_state=False) # Stop normal wandering
+        self.create_speech_bubble("I am running now! Catch me!", 3000)
+        self.canvas.bind("<Enter>", self.on_catch_me)
+        self.flee_mouse_loop()
+    def flee_mouse_loop(self):
+        if not self.fleeing_game_active: return
+        try:
+            mouse_x, mouse_y = self.root.winfo_pointerx(), self.root.winfo_pointery()
+            pet_x, pet_y = self.root.winfo_x(), self.root.winfo_y()
+            angle = math.atan2(pet_y - mouse_y, pet_x - mouse_x)
+            speed = 5 # Flee speed
+            new_x = int(pet_x + speed * math.cos(angle))
+            new_y = int(pet_y + speed * math.sin(angle))
+            screen_w, screen_h = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+            new_x = max(0, min(new_x, screen_w - 150))
+            new_y = max(0, min(new_y, screen_h - 150))
+            self.root.geometry("+{}+{}".format(new_x, new_y))
+            self.root.after(40, self.flee_mouse_loop)
+        except Exception: self.fleeing_game_active = False
+    def on_catch_me(self, event):
+        if not self.fleeing_game_active: return
+        self.fleeing_game_active = False
+        self.canvas.unbind("<Enter>")
+        self.create_speech_bubble("You caught me!", 3000)
+        self.set_mood("sad", 3000)
+        self.root.after(3000, lambda: self.toggle_wander(force_state=True))
+
+    def start_fish_clicker_game(self):
+        gw = Toplevel(self.root); gw.title("Fish Clicker!"); gw.geometry("300x250"); gw.transient(self.root); gw.wm_attributes("-topmost", True)
+        game_frame = Frame(gw); game_frame.pack(fill="both", expand=True)
+        info_frame = Frame(game_frame); info_frame.pack(pady=10)
+        time_label = Label(info_frame, text="Time: 10", font=("Arial", 14))
+        time_label.pack(side="left", padx=10)
+        score_label = Label(info_frame, text="Score: 0", font=("Arial", 14))
+        score_label.pack(side="left", padx=10)
+        gc = Canvas(game_frame, bg="#87CEEB", highlightthickness=0); gc.pack(fill="both", expand=True)
+        game_data = {"score": 0, "time_left": 10}
+        fish = gc.create_text(150, 100, text="🐟", font=("Arial", 30))
+        def on_fish_click(event):
+            if game_data["time_left"] > 0:
+                game_data["score"] += 1; score_label.config(text="Score: {}".format(game_data["score"]))
+                gc.coords(fish, random.randint(30, 270), random.randint(30, 170))
+        gc.tag_bind(fish, "<Button-1>", on_fish_click)
+        def countdown():
+            if game_data["time_left"] > 0:
+                game_data["time_left"] -= 1; time_label.config(text="Time: {}".format(game_data["time_left"]))
+                gw.after(1000, countdown)
+            else:
+                gc.delete(fish); gc.create_text(150, 100, text="Time's Up!", font=("Arial", 20), fill="red")
+                messagebox.showinfo("Time's Up!", "You fed me {} fish!".format(game_data["score"]), parent=gw)
+                self.set_mood("happy", 3000); gw.destroy()
+        countdown()
+        gw.protocol("WM_DELETE_WINDOW", lambda: [setattr(game_data, 'time_left', 0), gw.destroy()])
+
     def start_guess_game(self):
         gw = Toplevel(self.root); gw.title("Guess Number"); gw.geometry("300x250"); gw.transient(self.root); gw.wm_attributes("-topmost", True); gw.config(bg="#F0F0F0")
         secret, guesses = random.randint(1, 100), 7
         Label(gw, text="I'm thinking of a number\nbetween 1 and 100.", font=("Arial", 14), bg="#F0F0F0").pack(pady=10)
-        fb = Label(gw, text=f"{guesses} guesses left.", font=("Arial", 12), bg="#F0F0F0"); fb.pack(pady=5)
+        fb = Label(gw, text="{} guesses left.".format(guesses), font=("Arial", 12), bg="#F0F0F0"); fb.pack(pady=5)
         ent = Entry(gw, font=("Arial", 12), width=10); ent.pack(pady=5); ent.focus_set()
         def check():
             nonlocal guesses; 
             try:
                 g = int(ent.get()); guesses -= 1
-                if g == secret: fb.config(text=f"Correct! It was {secret}!", fg=SUCCESS_COLOR); self.set_mood("happy", 4000); ent.config(state="disabled")
-                elif guesses == 0: fb.config(text=f"Out of guesses! It was {secret}.", fg=ERROR_COLOR); self.set_mood("normal"); ent.config(state="disabled")
-                elif g < secret: fb.config(text=f"Too low! {guesses} left.")
-                else: fb.config(text=f"Too high! {guesses} left.")
+                if g == secret: fb.config(text="Correct! It was {}!".format(secret), fg=SUCCESS_COLOR); self.set_mood("happy", 4000); ent.config(state="disabled")
+                elif guesses == 0: fb.config(text="Out of guesses! It was {}.".format(secret), fg=ERROR_COLOR); self.set_mood("normal"); ent.config(state="disabled")
+                elif g < secret: fb.config(text="Too low! {} left.".format(guesses))
+                else: fb.config(text="Too high! {} left.".format(guesses))
             except: fb.config(text="Invalid number!", fg=ERROR_COLOR)
             ent.delete(0, 'end')
         Button(gw, text="Guess", command=check).pack(pady=10); gw.bind('<Return>', lambda e: check())
     
+    # --- NEW: Remade RPS Game ---
     def start_rps_game(self):
-        gw = Toplevel(self.root); gw.title("RPS"); gw.geometry("300x200"); gw.transient(self.root); gw.wm_attributes("-topmost", True)
-        Label(gw, text="Choose your weapon!", font=("Arial", 14)).pack(pady=10); bf = Frame(gw); bf.pack(pady=10)
-        res = Label(gw, text="Let's play!", font=("Arial", 12), wraplength=280); res.pack(pady=10, fill="x", expand=True)
-        def play(pc):
-            cc = random.choice(["Rock", "Paper", "Scissors"])
-            if pc == cc: res.config(text=f"Both chose {pc}. Tie!"); self.set_mood("normal")
-            elif (pc == "Rock" and cc == "Scissors") or (pc == "Scissors" and cc == "Paper") or (pc == "Paper" and cc == "Rock"): res.config(text=f"You chose {pc}, I chose {cc}. You win!"); self.set_mood("angry", 4000)
-            else: res.config(text=f"You chose {pc}, I chose {cc}. I win!"); self.set_mood("happy", 4000)
-        for c in ["Rock", "Paper", "Scissors"]: Button(bf, text=c, width=8, command=lambda x=c: play(x)).pack(side="left", padx=5)
+        if self.rps_window: self.rps_window.destroy() # Close if already open
+        
+        self.create_speech_bubble("Rock, Paper, Scissors... Choose!", 3000)
+        
+        self.rps_window = Toplevel(self.root); self.rps_window.overrideredirect(True); self.rps_window.wm_attributes("-topmost", True)
+        self.rps_window.config(bg=ACCENT_COLOR)
+        
+        bar_frame = Frame(self.rps_window, bg=BG_COLOR); bar_frame.pack(padx=1, pady=1)
+        
+        choices = ["Rock", "Paper", "Scissors"]
+        for choice in choices:
+            btn = Button(bar_frame, text=choice, command=lambda c=choice: self.play_rps_round(c), 
+                         bg=BG_COLOR, fg=FG_COLOR, relief="flat", 
+                         activebackground=BUTTON_HOVER_COLOR, activeforeground=FG_COLOR)
+            btn.pack(side="left", padx=5, pady=5)
+        
+        cancel_btn = Button(bar_frame, text="✖", command=self.close_rps_window, 
+                           bg=BG_COLOR, fg=ERROR_COLOR, relief="flat", 
+                           activebackground=BUTTON_HOVER_COLOR, activeforeground=FG_COLOR)
+        cancel_btn.pack(side="left", padx=(0, 5), pady=5)
+        
+        self.rps_window.geometry("+{}+{}".format(self.root.winfo_x() - 40, self.root.winfo_y() + 160))
+
+    def close_rps_window(self):
+        if self.rps_window:
+            self.rps_window.destroy()
+            self.rps_window = None
+
+    def play_rps_round(self, player_choice):
+        self.close_rps_window() # Close the button bar
+        
+        computer_choice = random.choice(["Rock", "Paper", "Scissors"])
+        
+        if player_choice == computer_choice:
+            result_text = "It's a tie!"
+            self.set_mood("normal")
+        elif (player_choice == "Rock" and computer_choice == "Scissors") or \
+             (player_choice == "Scissors" and computer_choice == "Paper") or \
+             (player_choice == "Paper" and computer_choice == "Rock"):
+            result_text = "You win... curses!"
+            self.set_mood("angry", 4000)
+        else:
+            result_text = "Yay, I win!"
+            self.set_mood("happy", 4000)
+            
+        self.create_speech_bubble("I chose {}!\n{}".format(computer_choice, result_text), 4000)
     
-    def start_catch_game(self):
-        self.game_running = True; gw = Toplevel(self.root); gw.title("Catch!"); gw.geometry("600x500"); gw.transient(self.root); gw.wm_attributes("-topmost", True)
-        gc = Canvas(gw, bg="white", highlightthickness=0); gc.pack(fill="both", expand=True); gc.bind("<Motion>", lambda e: [setattr(self, 'mouse_x', e.x), setattr(self, 'mouse_y', e.y)])
-        draw_tux_on_canvas(gc, 225, 175, self.skin, "gt", "angry", False)
-        msg = gc.create_text(300, 155, text="I will catch you!", font=("Arial", 16, "bold"), fill="red"); gw.after(2000, lambda: gc.delete(msg) if gc.winfo_exists() else None)
-        def loop(wf=0):
-            if not self.game_running: return
-            try:
-                bb = gc.bbox("gt"); cx, cy = (bb[0]+bb[2])/2, (bb[1]+bb[3])/2
-                if math.sqrt((cx-self.mouse_x)**2 + (cy-self.mouse_y)**2) < 40: self.game_running = False; messagebox.showinfo("Caught!", "I caught you!", parent=gw); self.set_mood("happy", 3000); gw.destroy(); return
-                ang = math.atan2(self.mouse_y-cy, self.mouse_x-cx); gc.move("gt", 3.5*math.cos(ang), 3.5*math.sin(ang))
-                nbb = gc.bbox("gt"); gc.delete("gt"); draw_tux_on_canvas(gc, nbb[0], nbb[1], self.skin, "gt", "angry", True, wf+1); gw.after(30, lambda: loop(wf+1))
-            except: self.game_running = False
-        gw.after(2000, loop); gw.protocol("WM_DELETE_WINDOW", lambda: [setattr(self, 'game_running', False), gw.destroy()])
+    # --- REMOVED OLD RPS GAME ---
     
+    # --- REMOVED start_catch_game ---
+
     def start_playground_game(self):
         self.playground_running = True; self.set_mood("happy", 5000); gw = Toplevel(self.root); gw.title("Playground"); gw.geometry("600x400"); gw.transient(self.root); gw.wm_attributes("-topmost", True)
         gc = Canvas(gw, bg="#77C74A", highlightthickness=0); gc.pack(fill="both", expand=True)
@@ -492,27 +603,28 @@ class PenguinPet:
         for i, c in enumerate(cups): gc.tag_bind(c, "<Button-1>", lambda e, idx=i: rev(idx))
         def shuf(sl_):
             nonlocal fp; 
-            if not gip: return
+            if not gip or not gw.winfo_exists(): return
             if sl_ <= 0: sl.config(text="Click the 🧊!"); return
             i1, i2 = random.sample(range(3), 2); gc.move(cups[i1], (i2-i1)*100, 0); gc.move(cups[i2], (i1-i2)*100, 0); cups[i1], cups[i2] = cups[i2], cups[i1]
             if fp == i1: fp = i2
             elif fp == i2: fp = i1
             gw.after(300, lambda: shuf(sl_ - 1))
         gw.after(2000, lambda: [gc.delete(fe) if gc.winfo_exists() else None, gc.itemconfigure(cups[fp], fill="black"), sl.config(text="Shuffling..."), shuf(10)])
-        gw.protocol("WM_DELETE_WINDOW", lambda: [setattr(self, 'game_running', False), gw.destroy()])
+        gw.protocol("WM_DELETE_WINDOW", lambda: [setattr(self, 'game_running', False), setattr(self, 'gip', False), gw.destroy()])
 
     # --- AI Chat ---
     def load_api_key(self): return open(API_KEY_FILE).read().strip() if os.path.exists(API_KEY_FILE) else None
     def save_api_key(self, key): 
         try: open(API_KEY_FILE, 'w').write(key) 
         except: messagebox.showerror("Error", "Could not save API key.")
-    def get_default_system_instruction(self): return f"You are {self.name}, the Linux penguin. Friendly, helpful, loves open-source. Concise and playful."
+    def get_default_system_instruction(self): return "You are {}, the Linux penguin. Friendly, helpful, loves open-source. Concise and playful.".format(self.name)
     def get_system_instruction(self): return self.ai_personality + "\n\n---ACTION RULES: End response with [ACTION:SET_MOOD:HAPPY/SAD/ANGRY/NORMAL] or [ACTION:SET_WANDER:TRUE/FALSE] to control state."
     def set_ai_personality(self):
         np = simpledialog.askstring("Personality", "Enter short personality:\n(e.g., 'Grumpy penguin')")
         if np and np.strip(): self.ai_personality = np.strip(); self.gemini_model = None; self.create_speech_bubble("Personality updated!", 3000)
     def reset_ai_personality(self): self.ai_personality = self.get_default_system_instruction(); self.gemini_model = None; self.create_speech_bubble("Personality reset!", 3000)
     def toggle_ai_mode(self):
+        if self.fleeing_game_active: return # Don't start AI while fleeing
         self.is_moving = False; 
         if self.ai_controls_window and self.ai_controls_window.winfo_exists(): self.ai_controls_window.lift(); return
         if not self.api_key:
@@ -529,7 +641,7 @@ class PenguinPet:
         self.chat_input = Entry(bf, font=("Arial", 10), bg=ACCENT_COLOR, fg='grey', insertbackground=FG_COLOR, relief="flat", width=30); self.chat_input.pack(side="left", fill="x", expand=True, padx=10, pady=5); self.chat_input.insert(0, "Chat..."); self.chat_input.bind("<FocusIn>", self.on_entry_focus_in); self.chat_input.bind("<FocusOut>", self.on_entry_focus_out)
         Button(bf, text="➤", command=self.send_ai_message, bg=BG_COLOR, fg=FG_COLOR, relief="flat", activebackground=BUTTON_HOVER_COLOR, activeforeground=FG_COLOR).pack(side="left", padx=5, pady=5)
         Button(bf, text="✖", command=self.exit_ai_mode, bg=BG_COLOR, fg=ERROR_COLOR, relief="flat", activebackground=BUTTON_HOVER_COLOR, activeforeground=FG_COLOR).pack(side="left", padx=(0, 5), pady=5)
-        self.ai_controls_window.geometry(f"+{self.root.winfo_x() - 75}+{self.root.winfo_y() + 160}"); self.chat_input.bind("<Return>", self.send_ai_message); self.set_force_mood("happy")
+        self.ai_controls_window.geometry("+{}+{}".format(self.root.winfo_x() - 75, self.root.winfo_y() + 160)); self.chat_input.bind("<Return>", self.send_ai_message); self.set_force_mood("happy")
     def on_entry_focus_in(self, event): 
         if self.chat_input.get() == "Chat...": self.chat_input.delete(0, 'end'); self.chat_input.config(fg=FG_COLOR)
     def on_entry_focus_out(self, event):
@@ -553,6 +665,7 @@ class PenguinPet:
 
     # --- AI Duo ---
     def start_ai_duo_setup(self):
+        if self.fleeing_game_active: return
         if not self.api_key:
              key = simpledialog.askstring("API Key", "Enter Gemini API Key:", show='*')
              if key: self.api_key = key; self.save_api_key(key)
@@ -575,7 +688,7 @@ class PenguinPet:
         def turn(tc, last, sp):
             if not self.ai_duo_running or not dw.winfo_exists(): return
             if max_turns > 0 and tc > max_turns: sl.config(text="Finished."); return
-            sl.config(text=f"Turn {tc}..." if max_turns==0 else f"Turn {tc}/{max_turns}...")
+            sl.config(text="Turn {}...".format(tc) if max_turns==0 else "Turn {}/{}".format(tc, max_turns))
             try:
                 if sp == "A":
                     resp = ca.send_message(last).text.strip(); b2.place_forget(); b1.config(text=resp); b1.place(x=50, y=50)
@@ -584,7 +697,7 @@ class PenguinPet:
                     resp = cb.send_message(last).text.strip(); b1.place_forget(); b2.config(text=resp); b2.place(x=350, y=50)
                     dw.after(4000, lambda: turn(tc+1, resp, "A"))
             except Exception as e: 
-                if dw.winfo_exists(): sl.config(text=f"Error: {e}"); self.ai_duo_running = False
+                if dw.winfo_exists(): sl.config(text="Error: {}".format(e)); self.ai_duo_running = False
         dw.protocol("WM_DELETE_WINDOW", lambda: [setattr(self, 'ai_duo_running', False), dw.destroy()]); turn(1, "Hi! Thoughts on Linux?", "A")
 
     # --- Clones & Idle ---
@@ -592,22 +705,37 @@ class PenguinPet:
     def destroy_all_clones(self): [c.root.destroy() for c in self.clone_list]; self.clone_list.clear()
     def prompt_for_clones(self):
         mx = 5000 if self.limit_unlocked else (self.clone_limit - len(self.clone_list))
-        if mx <= 0: messagebox.showinfo("Limit", f"Limit is {self.clone_limit}."); return
-        n = simpledialog.askinteger("Clones", f"How many? (Max: {mx})", minvalue=1, maxvalue=mx)
+        if mx <= 0: messagebox.showinfo("Limit", "Limit is {}. ".format(self.clone_limit)); return
+        n = simpledialog.askinteger("Clones", "How many? (Max: {})".format(mx), minvalue=1, maxvalue=mx)
         if n: [self.clone_list.append(PenguinClone(self, self.skin)) for _ in range(n)]
-    def random_chat(self): self.create_speech_bubble(random.choice([f"Hello, I am {self.name}!", "Let's play!", "I love Linux!", "*waddle*", "Compiling...", "Happy!", "Playground time?"]), 3000)
+    
+    def random_chat(self): 
+        phrases = [
+            "Hello, I am {}!".format(self.name), "Let's play!", "I love Linux!", 
+            "*waddle waddle*", "Compiling...", "Happy!", "Playground time?",
+            "Got any fish? 🐟", "I'm feeling... open-source today.",
+            "Did you know Linux is just a kernel?", "Beep boop. I mean... waddle."
+        ]
+        self.create_speech_bubble(random.choice(phrases), 3000)
+        
     def idle_loop(self):
-        if not self.is_moving and self.wander_enabled:
-            if not (self.ai_controls_window and self.ai_controls_window.winfo_exists()) and random.randint(1, 100) > 85: self.random_chat(); self.root.after(random.randint(5000, 10000), self.idle_loop); return
+        if not self.is_moving and self.wander_enabled and not self.fleeing_game_active:
+            ai_active = self.ai_controls_window and self.ai_controls_window.winfo_exists()
+            if not ai_active and random.randint(1, 100) > 85: 
+                self.random_chat()
+                self.root.after(random.randint(5000, 10000), self.idle_loop)
+                return
             self.root.after(random.randint(5000, 15000), self.start_wandering)
+            
     def start_wandering(self):
-        if not self.wander_enabled or self.is_moving: return
+        if not self.wander_enabled or self.is_moving or self.fleeing_game_active: return
         self.target_x, self.target_y = random.randint(0, self.root.winfo_screenwidth()-150), random.randint(0, self.root.winfo_screenheight()-150); self.is_moving = True; self.move_loop()
+        
     def move_loop(self):
-        if not self.is_moving or not self.wander_enabled: self.is_moving = False; self.redraw_tux(); self.idle_loop(); return
+        if not self.is_moving or not self.wander_enabled or self.fleeing_game_active: self.is_moving = False; self.redraw_tux(); self.idle_loop(); return
         cx, cy = self.root.winfo_x(), self.root.winfo_y(); dx, dy = self.target_x - cx, self.target_y - cy
         if math.sqrt(dx**2 + dy**2) < 5: self.is_moving = False; self.redraw_tux(); self.idle_loop(); return
-        ang = math.atan2(dy, dx); self.root.geometry(f"+{int(cx+3*math.cos(ang))}+{int(cy+3*math.sin(ang))}"); self.walk_frame += 1; self.redraw_tux(); self.root.after(50, self.move_loop)
+        ang = math.atan2(dy, dx); self.root.geometry("+{}+{}".format(int(cx+3*math.cos(ang)), int(cy+3*math.sin(ang)))); self.walk_frame += 1; self.redraw_tux(); self.root.after(50, self.move_loop)
 
 if __name__ == "__main__":
     main_root = tk.Tk()
