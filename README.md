@@ -20,12 +20,18 @@ This project likely requires a few Python libraries. You will need to list them 
 git clone https://github.com/GameVladY/talkingpenguintux.git
 ```
 
-```cd talkingpenguintux```
+```
+cd talkingpenguintux
+```
 
 # Make sure you have pip installed
-```pip install pillow google-generativeai```
+```
+pip install pillow google-generativeai
+```
 
 # ▶️ How to Run
 Once you have installed the dependencies, you can run the application with a single command:
 
-```python code.py```
+```
+python code.py
+```
